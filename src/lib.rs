@@ -97,6 +97,16 @@ pub struct StreamDecoder<R, D> {
 }
 
 impl<R, D> StreamDecoder<R, D> {
+    pub fn new(reader: R, decoder: D, size: usize) -> Self {
+        Self {
+            reader,
+            decoder,
+            buffer: vec![0; size],
+            read: 0,
+            write: 0,
+        }
+    }
+
     fn shift(&mut self) {
         self.buffer.copy_within(self.read..self.write, 0);
         self.write -= self.read;
@@ -149,17 +159,33 @@ where
     }
 }
 
-pub fn add(left: usize, right: usize) -> usize {
-    left + right
-}
-
 #[cfg(test)]
 mod tests {
+    use std::io::Cursor;
+
     use super::*;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+    #[tokio::test]
+    async fn stream_decoder() {
+        const TAKE: usize = 2;
+
+        let source: Vec<u8> = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0];
+
+        let mut decoder =
+            StreamDecoder::new(Cursor::new(source.clone()), SplitDecoder::<TAKE>, 1024);
+
+        let mut chunks = source.chunks_exact(TAKE);
+
+        loop {
+            if let Some(chunk) = chunks.next() {
+                assert_eq!(decoder.async_decode().await.unwrap(), chunk);
+            } else {
+                assert!(matches!(
+                    decoder.async_decode().await,
+                    Err(StreamError::Io(_))
+                ));
+                break;
+            }
+        }
     }
 }
