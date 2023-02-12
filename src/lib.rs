@@ -6,12 +6,22 @@ pub type Item<'a, T> = (T, &'a [u8]);
 pub trait Decoder<'bytes> {
     type Item;
     type Error;
+
+    /// Item decode
     fn decode(
         &mut self,
         bytes: &'bytes [u8],
     ) -> Result<Item<'bytes, Self::Item>, Error<Self::Error>>;
+
+    /// Fast way to check buffer
+    fn check(&mut self, bytes: &'bytes [u8]) -> Result<(), Error<Self::Error>> {
+        self.decode(bytes)?;
+        Ok(())
+    }
+
+    /// Fast way to check needed bytes
     fn is_needed(&mut self, bytes: &'bytes [u8]) -> bool {
-        matches!(self.decode(bytes), Err(Error::Incomplete(_)))
+        matches!(self.check(bytes), Err(Error::Incomplete(_)))
     }
 }
 
@@ -110,37 +120,25 @@ where
     pub async fn async_decode(
         &mut self,
     ) -> Result<<D as Decoder<'_>>::Item, StreamError<<D as Decoder<'_>>::Error>> {
-        let Self {
-            ref mut reader,
-            ref mut decoder,
-            ref mut buffer,
-            ref mut read,
-            ref mut write,
-        } = *self;
-
-        while decoder.is_needed(&buffer[*read..*write]) {
-            let tail = buffer.capacity() - *write;
-            let free = tail + *read;
-            if free > 0 {
-                if tail == 0 {
-                    buffer.copy_within(*read..*write, 0);
-                    *write -= *read;
-                    *read = 0;
+        while self.decoder.is_needed(&self.buffer[self.read..self.write]) {
+            if self.free() > 0 {
+                if self.tail() == 0 {
+                    self.shift();
                 }
             } else {
                 return Err(StreamError::Overflow);
             }
 
-            let n = reader.read(&mut buffer[*write..]).await?;
+            let n = self.reader.read(&mut self.buffer[self.write..]).await?;
             if n == 0 {
                 return Err(io::Error::new(io::ErrorKind::ConnectionAborted, "").into());
             }
-            *write += n;
+            self.write += n;
         }
 
-        match decoder.decode(&buffer[*read..*write]) {
+        match self.decoder.decode(&self.buffer[self.read..self.write]) {
             Ok((item, tail)) => {
-                *read = *write - tail.len();
+                self.read = self.write - tail.len();
                 Ok(item)
             }
             Err(Error::Custom(err)) => Err(StreamError::Decode(err)),
