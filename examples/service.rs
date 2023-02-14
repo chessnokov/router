@@ -1,4 +1,4 @@
-use std::{fmt, future::Future, time::Duration};
+use std::{fmt, time::Duration};
 
 use async_trait::async_trait;
 use tokio::{io::AsyncReadExt, main, net::TcpListener, select};
