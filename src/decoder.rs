@@ -25,6 +25,20 @@ pub trait Decoder<'bytes> {
     }
 }
 
+impl<'bytes, F, I, E> Decoder<'bytes> for F
+where
+    F: FnMut(&'bytes [u8]) -> Result<Item<'bytes, I>, Error<E>>,
+{
+    type Item = I;
+    type Error = E;
+    fn decode(
+        &mut self,
+        bytes: &'bytes [u8],
+    ) -> Result<Item<'bytes, Self::Item>, Error<Self::Error>> {
+        (self)(bytes)
+    }
+}
+
 #[derive(Debug)]
 pub enum Error<T> {
     Incomplete(Option<usize>),
