@@ -108,44 +108,28 @@ mod tests {
 
     use super::*;
 
-    struct SliceSplitDecoder<const N: usize>;
-    impl<'bytes, const N: usize> Decoder<'bytes> for SliceSplitDecoder<N> {
-        type Item = &'bytes [u8];
-        type Error = ();
-
-        fn decode(
-            &mut self,
-            bytes: &'bytes [u8],
-        ) -> Result<Item<'bytes, Self::Item>, DecodeError<Self::Error>> {
-            if bytes.len() < N {
-                Err(DecodeError::Incomplete(Some(N - bytes.len())))
-            } else {
-                Ok(bytes.split_at(N))
-            }
-        }
-    }
-
-    struct ArraySplitDecoder<const N: usize>;
-    impl<'bytes, const N: usize> Decoder<'bytes> for ArraySplitDecoder<N> {
-        type Item = [u8; N];
-        type Error = ();
-
-        fn decode(
-            &mut self,
-            bytes: &'bytes [u8],
-        ) -> Result<Item<'bytes, Self::Item>, DecodeError<Self::Error>> {
-            if let Some(slice) = bytes.get(..N) {
-                Ok((Self::Item::try_from(slice).unwrap(), &bytes[N..]))
-            } else {
-                Err(DecodeError::Incomplete(Some(N - bytes.len())))
-            }
-        }
-    }
+    const TAKE: usize = 2;
 
     #[tokio::test]
     async fn decoder_ref() {
-        const TAKE: usize = 2;
 
+        struct SliceSplitDecoder<const N: usize>;
+        impl<'bytes, const N: usize> Decoder<'bytes> for SliceSplitDecoder<N> {
+            type Item = &'bytes [u8];
+            type Error = ();
+    
+            fn decode(
+                &mut self,
+                bytes: &'bytes [u8],
+            ) -> Result<Item<'bytes, Self::Item>, DecodeError<Self::Error>> {
+                if bytes.len() < N {
+                    Err(DecodeError::Incomplete(Some(N - bytes.len())))
+                } else {
+                    Ok(bytes.split_at(N))
+                }
+            }
+        }
+    
         let source: Vec<u8> = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0];
 
         let mut decoder = Stream::new(Cursor::new(source.clone()), SliceSplitDecoder::<TAKE>, 1024);
@@ -164,8 +148,24 @@ mod tests {
 
     #[tokio::test]
     async fn decoder_own() {
-        const TAKE: usize = 2;
 
+        struct ArraySplitDecoder<const N: usize>;
+        impl<'bytes, const N: usize> Decoder<'bytes> for ArraySplitDecoder<N> {
+            type Item = [u8; N];
+            type Error = ();
+    
+            fn decode(
+                &mut self,
+                bytes: &'bytes [u8],
+            ) -> Result<Item<'bytes, Self::Item>, DecodeError<Self::Error>> {
+                if let Some(slice) = bytes.get(..N) {
+                    Ok((Self::Item::try_from(slice).unwrap(), &bytes[N..]))
+                } else {
+                    Err(DecodeError::Incomplete(Some(N - bytes.len())))
+                }
+            }
+        }
+    
         let source: Vec<u8> = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0];
 
         let mut decoder = Stream::new(Cursor::new(source.clone()), ArraySplitDecoder::<TAKE>, 1024);
