@@ -3,38 +3,39 @@ use std::{error::Error as ErrorExt, fmt};
 pub mod stream;
 
 pub type Item<'a, T> = (T, &'a [u8]);
-pub trait Decoder<'bytes> {
-    type Item;
+pub trait Decoder {
+    type Item<'a>: fmt::Debug;
     type Error;
 
     /// Item decode
-    fn decode(
+    fn decode<'b>(
         &mut self,
-        bytes: &'bytes [u8],
-    ) -> Result<Item<'bytes, Self::Item>, Error<Self::Error>>;
+        bytes: &'b [u8],
+    ) -> Result<Item<'b, Self::Item<'b>>, Error<Self::Error>>;
 
     /// Fast way to check buffer
-    fn check(&mut self, bytes: &'bytes [u8]) -> Result<(), Error<Self::Error>> {
+    fn check(&mut self, bytes: &[u8]) -> Result<(), Error<Self::Error>> {
         self.decode(bytes)?;
         Ok(())
     }
 
     /// Fast way to check needed bytes
-    fn is_needed(&mut self, bytes: &'bytes [u8]) -> bool {
+    fn is_needed(&mut self, bytes: &[u8]) -> bool {
         matches!(self.check(bytes), Err(Error::Incomplete(_)))
     }
 }
 
-impl<'bytes, F, I, E> Decoder<'bytes> for F
+impl<F, I, E> Decoder for F
 where
-    F: FnMut(&'bytes [u8]) -> Result<Item<'bytes, I>, Error<E>>,
+    F: for<'a> FnMut(&'a [u8]) -> Result<Item<'a, I>, Error<E>>,
+    I: fmt::Debug,
 {
-    type Item = I;
+    type Item<'a> = I;
     type Error = E;
-    fn decode(
+    fn decode<'b>(
         &mut self,
-        bytes: &'bytes [u8],
-    ) -> Result<Item<'bytes, Self::Item>, Error<Self::Error>> {
+        bytes: &'b [u8],
+    ) -> Result<Item<'b, Self::Item<'b>>, Error<Self::Error>> {
         (self)(bytes)
     }
 }
