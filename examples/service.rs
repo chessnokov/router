@@ -13,19 +13,20 @@ async fn main() -> anyhow::Result<()> {
     let listener = TcpListener::bind("0.0.0.0:8080").await?;
     let (stream, addr) = listener.accept().await?;
     println!("Connect from {addr}");
-    Server::run(Stream::new(stream, EchoDecoder, 1024), MyService).await;
+    let stream = Stream::new(stream, EchoDecoder, 1024);
+    run(stream).await;
 
     Ok(())
 }
 
 struct EchoDecoder;
-impl<'bytes> Decoder<'bytes> for EchoDecoder {
-    type Item = &'bytes [u8];
+impl Decoder for EchoDecoder {
+    type Item<'a> = &'a [u8];
     type Error = ();
-    fn decode(
+    fn decode<'b>(
         &mut self,
-        bytes: &'bytes [u8],
-    ) -> Result<Item<'bytes, Self::Item>, Error<Self::Error>> {
+        bytes: &'b [u8],
+    ) -> Result<Item<'b, Self::Item<'b>>, Error<Self::Error>> {
         Ok(bytes.split_at(bytes.len()))
     }
 }
@@ -51,23 +52,13 @@ impl Producer for MyService {
     }
 }
 
-struct Server;
-impl Server {
-    async fn run<R, D, S, M>(mut decoder: Stream<R, D>, mut service: S)
-    where
-        R: AsyncReadExt + Unpin,
-        D: for<'a> Decoder<'a, Item = M>,
-        M: fmt::Debug,
-        S: for<'a> Service<'a, Request = M, Response<'a> = M> + 'static,
-    {
-        select! {
-            Ok(message) = decoder.async_decode() => {
-                print!("{message:?}");
-                service.consume(message);
-            }
-            message = service.produce() => {
-                print!("{message:?}");
-            }
-        }
+async fn run<R, D>(mut decoder: Stream<R, D>)
+where
+    R: AsyncReadExt + Unpin + 'static,
+    D: Decoder + 'static,
+    D::Item<'static>: fmt::Debug + 'static,
+{
+    if let Ok(message) = decoder.async_decode().await {
+        print!("{message:?}");
     }
 }

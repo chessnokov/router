@@ -66,11 +66,11 @@ impl<R, D> Stream<R, D> {
 impl<R, D> Stream<R, D>
 where
     R: AsyncReadExt + Unpin,
-    D: for<'bytes> Decoder<'bytes>,
+    D: Decoder,
 {
     pub async fn async_decode(
         &mut self,
-    ) -> Result<<D as Decoder<'_>>::Item, Error<<D as Decoder<'_>>::Error>> {
+    ) -> Result<<D as Decoder>::Item<'_>, Error<<D as Decoder>::Error>> {
         while self.decoder.is_needed(&self.buffer[self.read..self.write]) {
             if self.free() > 0 {
                 if self.tail() == 0 {
@@ -112,16 +112,15 @@ mod tests {
 
     #[tokio::test]
     async fn decoder_ref() {
-
         struct SliceSplitDecoder<const N: usize>;
-        impl<'bytes, const N: usize> Decoder<'bytes> for SliceSplitDecoder<N> {
-            type Item = &'bytes [u8];
+        impl<const N: usize> Decoder for SliceSplitDecoder<N> {
+            type Item<'a> = &'a [u8];
             type Error = ();
-    
-            fn decode(
+
+            fn decode<'b>(
                 &mut self,
-                bytes: &'bytes [u8],
-            ) -> Result<Item<'bytes, Self::Item>, DecodeError<Self::Error>> {
+                bytes: &'b [u8],
+            ) -> Result<Item<'b, Self::Item<'b>>, DecodeError<Self::Error>> {
                 if bytes.len() < N {
                     Err(DecodeError::Incomplete(Some(N - bytes.len())))
                 } else {
@@ -129,7 +128,7 @@ mod tests {
                 }
             }
         }
-    
+
         let source: Vec<u8> = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0];
 
         let mut decoder = Stream::new(Cursor::new(source.clone()), SliceSplitDecoder::<TAKE>, 1024);
@@ -148,16 +147,15 @@ mod tests {
 
     #[tokio::test]
     async fn decoder_own() {
-
         struct ArraySplitDecoder<const N: usize>;
-        impl<'bytes, const N: usize> Decoder<'bytes> for ArraySplitDecoder<N> {
-            type Item = [u8; N];
+        impl<const N: usize> Decoder for ArraySplitDecoder<N> {
+            type Item<'a> = [u8; N];
             type Error = ();
-    
-            fn decode(
+
+            fn decode<'b>(
                 &mut self,
-                bytes: &'bytes [u8],
-            ) -> Result<Item<'bytes, Self::Item>, DecodeError<Self::Error>> {
+                bytes: &'b [u8],
+            ) -> Result<Item<'b, Self::Item<'static>>, DecodeError<Self::Error>> {
                 if let Some(slice) = bytes.get(..N) {
                     Ok((Self::Item::try_from(slice).unwrap(), &bytes[N..]))
                 } else {
@@ -165,7 +163,7 @@ mod tests {
                 }
             }
         }
-    
+
         let source: Vec<u8> = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 0];
 
         let mut decoder = Stream::new(Cursor::new(source.clone()), ArraySplitDecoder::<TAKE>, 1024);
