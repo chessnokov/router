@@ -32,6 +32,7 @@ where
 {
     type Item<'a> = I;
     type Error = E;
+
     fn decode<'b>(
         &mut self,
         bytes: &'b [u8],

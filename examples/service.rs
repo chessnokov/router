@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{fmt, time::Duration};
 
 use async_trait::async_trait;
 use tokio::{io::AsyncReadExt, main, net::TcpListener, select};
@@ -14,17 +14,28 @@ async fn main() -> anyhow::Result<()> {
     let (stream, addr) = listener.accept().await?;
 
     println!("Connect from {addr}");
-    run(Stream::new(stream, EchoDecoder, 1024), MyService).await;
+    let mut stream = Stream::new(stream, EchoDecoder, 1024);
+    let service = MyService;
+
+    select! {
+        Ok(message) = stream.async_decode() => {
+            print!("{message:?}");
+            service.consume(message);
+        }
+        message = service.produce() => {
+            print!("{message:?}");
+        }
+    }
 
     Ok(())
 }
 
-async fn run<'a, R, D, S, M>(mut stream: Stream<R, D>, mut service: S)
+async fn run<R, D, S, M>(mut stream: Stream<R, D>, mut service: S)
 where
-    R: AsyncReadExt + Unpin + 'a,
-    D: Decoder<Item<'a> = M> + 'a,
-    M: 'a,
-    S: Service<Request<'a> = M, Response<'a> = M> + 'static,
+    R: AsyncReadExt + Unpin,
+    D: for<'a> Decoder<Item<'a> = M> + 'static,
+    S: for<'a> Service<Request<'a> = M, Response<'a> = M> + 'static,
+    M: fmt::Debug,
 {
     select! {
         Ok(message) = stream.async_decode() => {
@@ -35,7 +46,6 @@ where
             // print!("{message:?}");
         }
     }
-    if let Ok(message) = stream.async_decode().await {}
 }
 
 struct EchoDecoder;
