@@ -68,9 +68,7 @@ where
     R: AsyncReadExt + Unpin,
     D: Decoder,
 {
-    pub async fn async_decode(
-        &mut self,
-    ) -> Result<<D as Decoder>::Item<'_>, Error<<D as Decoder>::Error>> {
+    pub async fn async_decode(&mut self) -> Result<D::Item<'_>, Error<D::Error>> {
         while self.decoder.is_needed(&self.buffer[self.read..self.write]) {
             if self.free() > 0 {
                 if self.tail() == 0 {

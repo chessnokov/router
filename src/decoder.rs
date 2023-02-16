@@ -29,10 +29,12 @@ pub trait Decoder {
 
 impl<F, I, E> Decoder for F
 where
-    F: 'static + FnMut(&[u8]) -> Result<Item<'_, I>, Error<E>>,
+    F: for<'a> FnMut(&'a [u8]) -> Result<Item<'a, I>, Error<E>>,
+    I: fmt::Debug,
 {
     type Item<'a> = I;
     type Error = E;
+
     fn decode<'b>(
         &mut self,
         bytes: &'b [u8],
