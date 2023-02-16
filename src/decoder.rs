@@ -4,7 +4,9 @@ pub mod stream;
 
 pub type Item<'a, T> = (T, &'a [u8]);
 pub trait Decoder {
-    type Item<'a>: fmt::Debug;
+    type Item<'a>
+    where
+        Self: 'a;
     type Error;
 
     /// Item decode

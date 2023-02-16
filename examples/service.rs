@@ -26,7 +26,6 @@ async fn main() -> anyhow::Result<()> {
             print!("{message:?}");
         }
     }
-
     Ok(())
 }
 
@@ -52,7 +51,6 @@ struct EchoDecoder;
 impl Decoder for EchoDecoder {
     type Item<'a> = &'a [u8];
     type Error = ();
-
     fn decode<'b>(
         &mut self,
         bytes: &'b [u8],
@@ -80,5 +78,16 @@ impl Producer for MyService {
     async fn produce(&self) -> Self::Response<'_> {
         tokio::time::sleep(Duration::from_secs(1)).await;
         b"Hello World!"
+    }
+}
+
+async fn run<R, D>(mut decoder: Stream<R, D>)
+where
+    R: AsyncReadExt + Unpin + 'static,
+    D: Decoder + 'static,
+    D::Item<'static>: fmt::Debug + 'static,
+{
+    if let Ok(message) = decoder.async_decode().await {
+        print!("{message:?}");
     }
 }
