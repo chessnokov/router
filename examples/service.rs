@@ -26,10 +26,11 @@ async fn main() -> anyhow::Result<()> {
             print!("{message:?}");
         }
     }
+
     Ok(())
 }
 
-async fn run<R, D, S, M>(mut stream: Stream<R, D>, mut service: S)
+pub async fn run<R, D, S, M>(mut stream: Stream<R, D>, service: S)
 where
     R: AsyncReadExt + Unpin,
     D: for<'a> Decoder<Item<'a> = M> + 'static,
@@ -38,11 +39,11 @@ where
 {
     select! {
         Ok(message) = stream.async_decode() => {
-            // print!("{message:?}");
+            print!("{message:?}");
             service.consume(message);
         }
         message = service.produce() => {
-            // print!("{message:?}");
+            print!("{message:?}");
         }
     }
 }
@@ -78,16 +79,5 @@ impl Producer for MyService {
     async fn produce(&self) -> Self::Response<'_> {
         tokio::time::sleep(Duration::from_secs(1)).await;
         b"Hello World!"
-    }
-}
-
-async fn run<R, D>(mut decoder: Stream<R, D>)
-where
-    R: AsyncReadExt + Unpin + 'static,
-    D: Decoder + 'static,
-    D::Item<'static>: fmt::Debug + 'static,
-{
-    if let Ok(message) = decoder.async_decode().await {
-        print!("{message:?}");
     }
 }
